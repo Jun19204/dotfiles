@@ -198,3 +198,12 @@ let g:clipboard = {
     \ 'cache_enabled': 0,
     \ }
 
+" ================================
+" 13. 커서 모양 고정
+" ================================
+set guicursor=
+let &t_EI = "\e[1 q"
+let &t_SI = "\e[5 q"
+au VimEnter * silent !echo -ne "\e[1 q"
+au VimLeave * silent !echo -ne "\e[1 q"
+
