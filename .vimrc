@@ -9,6 +9,8 @@ set nocompatible
 set encoding=utf-8
 set fileencodings=utf-8,cp949
 scriptencoding utf-8
+set ttimeout
+set ttimeoutlen=40
 
 " ================================
 " 2. 플러그인 (vim-plug)
@@ -210,7 +212,7 @@ let g:clipboard = {
 " 13. 커서 모양 고정
 " ================================
 set guicursor=
-let &t_EI = "\e[1 q"
-let &t_SI = "\e[5 q"
-au VimEnter * silent !echo -ne "\e[1 q"
-au VimLeave * silent !echo -ne "\e[1 q"
+" let &t_EI = "\e[1 q"
+" let &t_SI = "\e[5 q"
+" au VimEnter * silent !echo -ne "\e[1 q"
+" au VimLeave * silent !echo -ne "\e[1 q"
