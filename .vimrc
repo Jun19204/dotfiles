@@ -33,9 +33,25 @@ call plug#end()
 " ================================
 syntax on
 set number
+set termguicolors
+set background=dark
+let g:gruvbox_contrast_dark = 'medium'
+let g:gruvbox_bold = 0
+let g:gruvbox_italic = 0
+let g:airline_theme='gruvbox'
+let g:airline_powerline_fonts = 0
+colorscheme gruvbox
+
 set cursorline
 highlight CursorLine guibg=#2a2a2a
 highlight ColorColumn guibg=#1f1f1f
+
+" coc.nvim 팝업창 가독성 개선
+highlight CocFloating      ctermbg=235 guibg=#3c3836
+highlight CocErrorFloat    ctermfg=203 guifg=#fb4934
+highlight CocInfoFloat     ctermfg=214 guifg=#fabd2f
+highlight CocWarningFloat  ctermfg=208 guifg=#fe8019
+
 set autoindent
 set smartindent
 set tabstop=4
@@ -45,16 +61,6 @@ set completeopt=menuone,noinsert,noselect
 set clipboard=unnamedplus
 set signcolumn=yes
 set colorcolumn=100
-
-set termguicolors
-set background=dark
-let g:gruvbox_contrast_dark = 'medium'
-let g:gruvbox_bold = 0
-let g:gruvbox_italic = 0
-let g:airline_theme='gruvbox'
-let g:airline_powerline_fonts = 0
-
-colorscheme gruvbox
 
 " ================================
 " 4. C++ 하이라이트
@@ -211,8 +217,12 @@ let g:clipboard = {
 " ================================
 " 13. 커서 모양 고정
 " ================================
-set guicursor=
-" let &t_EI = "\e[1 q"
-" let &t_SI = "\e[5 q"
-" au VimEnter * silent !echo -ne "\e[1 q"
-" au VimLeave * silent !echo -ne "\e[1 q"
+" WSL 윈도우 터미널용 커서 설정 (찌꺼기 방지 버전)
+if !has('gui_running')
+  " 입력 모드로 들어갈 때: 얇은 바 (5 q)
+  let &t_SI = "\<Esc>[5 q"
+  " 입력 모드에서 나갈 때 (일반 모드): 블록 (2 q)
+  let &t_EI = "\<Esc>[2 q"
+  " 교체 모드 (Replace): 밑줄 (3 q)
+  let &t_SR = "\<Esc>[3 q"
+endif
