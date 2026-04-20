@@ -32,6 +32,8 @@ call plug#end()
 syntax on
 set number
 set cursorline
+highlight CursorLine guibg=#2a2a2a
+highlight ColorColumn guibg=#1f1f1f
 set autoindent
 set smartindent
 set tabstop=4
@@ -39,13 +41,18 @@ set shiftwidth=4
 set expandtab
 set completeopt=menuone,noinsert,noselect
 set clipboard=unnamedplus
+set signcolumn=yes
+set colorcolumn=100
 
 set termguicolors
 set background=dark
-let g:gruvbox_contrast_dark = 'hard'
+let g:gruvbox_contrast_dark = 'medium'
+let g:gruvbox_bold = 0
+let g:gruvbox_italic = 0
 let g:airline_theme='gruvbox'
+let g:airline_powerline_fonts = 0
 
-autocmd VimEnter * colorscheme gruvbox
+colorscheme gruvbox
 
 " ================================
 " 4. C++ 하이라이트
@@ -53,6 +60,7 @@ autocmd VimEnter * colorscheme gruvbox
 let g:cpp_class_scope_highlight = 1
 let g:cpp_member_variable_highlight = 1
 let g:cpp_class_decl_highlight = 1
+let g:cpp_experimental_template_highlight = 1
 
 " ================================
 " 5. 실행 관련 함수
@@ -206,4 +214,3 @@ let &t_EI = "\e[1 q"
 let &t_SI = "\e[5 q"
 au VimEnter * silent !echo -ne "\e[1 q"
 au VimLeave * silent !echo -ne "\e[1 q"
-
