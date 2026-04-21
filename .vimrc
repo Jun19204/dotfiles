@@ -1,5 +1,5 @@
 " =================================================================
-" [완전 통합 안정본 v2] 플러그인 + 테마 + C/C++/GDB/Valgrind
+" [완전 통합 안정본 v2] 플러그인 + 테마 + C/GDB/Valgrind
 " =================================================================
 
 " ================================
@@ -51,6 +51,11 @@ highlight CocFloating      ctermbg=235 guibg=#3c3836
 highlight CocErrorFloat    ctermfg=203 guifg=#fb4934
 highlight CocInfoFloat     ctermfg=214 guifg=#fabd2f
 highlight CocWarningFloat  ctermfg=208 guifg=#fe8019
+highlight CocDisabled ctermfg=242 guifg=#665c54
+highlight CocHintFloat ctermfg=250 guifg=#d5c4a1
+highlight CocFadeOut ctermfg=250 guifg=#a89984
+highlight CocUnusedSuggest ctermfg=250 guifg=#a89984
+
 
 set autoindent
 set smartindent
