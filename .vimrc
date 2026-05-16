@@ -1,5 +1,5 @@
 " =================================================================
-" [완전 통합 안정본 v2] 플러그인 + 테마 + C/GDB/Valgrind
+" [완전 통합 안정본 v3] 플러그인 + 테마 + C/GDB/Valgrind
 " =================================================================
 
 " ================================
@@ -11,6 +11,10 @@ set fileencodings=utf-8,cp949
 scriptencoding utf-8
 set ttimeout
 set ttimeoutlen=40
+
+" gf 명령어가 시스템 include 폴더에 있는 라이브러리를 찾음
+set path=.,/usr/include,/usr/local/include,,
+set suffixesadd=.h,.c,.cpp,.hpp
 
 " ================================
 " 2. 플러그인 (vim-plug)
@@ -195,6 +199,7 @@ nnoremap <F6> :w<CR>:call <SID>Build()<CR>
 nnoremap <F7> :w<CR>:call <SID>Valgrind('basic')<CR>
 nnoremap <F8> :w<CR>:call <SID>Valgrind('full')<CR>
 nnoremap <leader>d :w<CR>:call <SID>GDB()<CR>
+nnoremap <silent> K :call CocActionAsync('doHover')<CR>
 
 " GDB 내부 키
 tnoremap <F10> <C-\><C-n>:call chansend(b:terminal_job_id, "next\n")<CR>
