@@ -123,9 +123,15 @@ function! s:Build()
 
     let sources = join(map(files, 'shellescape(v:val)'), ' ')
 
-    let flags = '-g -Wall -Wextra'
+    let base_flags = '-g -Wall -Wextra'
+    
+    " 현재 파일이나 폴더 내 소스에 raylib.h가 포함되어 있다면 플래그를 자동으로 붙임
+    let lib_flags = ''
+    if search('raylib.h', 'nw') > 0 || filereadable('raylib.h')
+        let lib_flags = ' -lraylib -lGL -lm -lpthread -ldl -lrt -lX11'
+    endif
 
-    execute '!' . bin . ' ' . flags . ' ' . sources . ' -o ' . shellescape(exe)
+    execute '!' . bin . ' ' . base_flags . ' ' . sources . ' -o ' . shellescape(exe) . ' ' . lib_flags
 
     if v:shell_error != 0
         echo "컴파일 실패"
