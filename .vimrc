@@ -201,6 +201,12 @@ nnoremap <F8> :w<CR>:call <SID>Valgrind('full')<CR>
 nnoremap <leader>d :w<CR>:call <SID>GDB()<CR>
 nnoremap <silent> K :call CocActionAsync('doHover')<CR>
 
+" LSP 기반 코드 탐색 단축키
+nnoremap <silent> gd <Plug>(coc-definition)   
+nnoremap <silent> gy <Plug>(coc-type-definition)
+nnoremap <silent> gi <Plug>(coc-implementation)
+nnoremap <silent> gr <Plug>(coc-references)
+
 " GDB 내부 키
 tnoremap <F10> <C-\><C-n>:call chansend(b:terminal_job_id, "next\n")<CR>
 tnoremap <F11> <C-\><C-n>:call chansend(b:terminal_job_id, "step\n")<CR>
