@@ -1,5 +1,5 @@
 " =================================================================
-" [완전 통합 안정본 v3] 플러그인 + 테마 + C/GDB/Valgrind
+" [C/C++전용 Vim 설정] 플러그인 + 테마 + C/GDB/Valgrind
 " =================================================================
 
 " ================================
@@ -59,7 +59,6 @@ highlight CocDisabled ctermfg=242 guifg=#665c54
 highlight CocHintFloat ctermfg=250 guifg=#d5c4a1
 highlight CocFadeOut ctermfg=250 guifg=#a89984
 highlight CocUnusedSuggest ctermfg=250 guifg=#a89984
-
 
 set autoindent
 set smartindent
@@ -248,3 +247,4 @@ if !has('gui_running')
   " 교체 모드 (Replace): 밑줄 (3 q)
   let &t_SR = "\<Esc>[3 q"
 endif
+
