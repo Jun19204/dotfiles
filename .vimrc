@@ -1,5 +1,5 @@
 " =================================================================
-" [C/C++전용 Vim 설정] 플러그인 + 테마 + C/GDB/Valgrind
+" [C/C++전용 Vim 설정] 플러그인 + 테마 + C/GDB/Valgrind (통합 보완본)
 " =================================================================
 
 " ================================
@@ -79,7 +79,7 @@ let g:cpp_class_decl_highlight = 1
 let g:cpp_experimental_template_highlight = 1
 
 " ================================
-" 5. 실행 관련 함수
+" 5. 실행 관련 헬퍼 함수
 " ================================
 
 " 실행파일 이름 (경로 분리)
@@ -98,6 +98,18 @@ function! s:GetCompiler()
     return expand('%:e') ==# 'c' ? 'gcc' : 'g++'
 endfunction
 
+" GDB 터미널 전용 명령어 송신 함수
+function! s:SendGdbCommand(cmd)
+    " 'gdb-inferior'라는 이름을 가진 터미널 버퍼를 검색
+    let buf = filter(range(1, bufnr('$')), 'bufname(v:val) =~# "gdb-inferior"')
+    if !empty(buf)
+        call term_sendkeys(buf[0], a:cmd . "\n")
+        echo "GDB 명령 전송: " . a:cmd
+    else
+        echo "실행 중인 GDB 터미널을 찾을 수 없습니다."
+    endif
+endfunction
+
 " ================================
 " 6. Build (핵심)
 " ================================
@@ -114,27 +126,38 @@ function! s:Build()
 
     let bin = s:GetCompiler()
     let exe = s:ExeName()
-
-    " 같은 확장자 파일 자동 포함
     let ext = expand('%:e')
 
+    " 소스 파일 수집 (C++의 경우 프로젝트 내 여러 확장자 통합 수집)
     if ext ==# 'c'
         let files = glob('*.c', 0, 1)
     else
-        let files = glob('*.cpp', 0, 1)
+        let files = glob('*.cpp', 0, 1) + glob('*.cc', 0, 1) + glob('*.cxx', 0, 1)
     endif
 
-    let sources = join(map(files, 'shellescape(v:val)'), ' ')
-
-    let base_flags = '-g -Wall -Wextra'
-    
-    " 현재 파일이나 폴더 내 소스에 raylib.h가 포함되어 있다면 플래그를 자동으로 붙임
-    let lib_flags = ''
-    if search('raylib.h', 'nw') > 0 || filereadable('raylib.h')
-        let lib_flags = ' -lraylib -lGL -lm -lpthread -ldl -lrt -lX11'
+    " raylib.h 자동 감지 로직 강화 (개별 소스 상단 헤더 체크)
+    let has_raylib = filereadable('raylib.h')
+    if !has_raylib
+        for f in files
+            if join(readfile(f, '', 30), "\n") =~# 'raylib\.h'
+                let has_raylib = 1
+                break
+            endif
+        endfor
     endif
 
-    execute '!' . bin . ' ' . base_flags . ' ' . sources . ' -o ' . shellescape(exe) . ' ' . lib_flags
+    " 안전한 아규먼트 리스트 빌드 (공백 및 이스케이프 꼬임 방지)
+    let cmd_list = [bin, '-g', '-Wall', '-Wextra']
+    call extend(cmd_list, map(copy(files), 'shellescape(v:val)'))
+    call extend(cmd_list, ['-o', shellescape(exe)])
+
+    " 라이브러리 플래그 추가
+    if has_raylib
+        call extend(cmd_list, ['-lraylib', '-lGL', '-lm', '-lpthread', '-ldl', '-lrt', '-lX11'])
+    endif
+
+    " 명령어 실행
+    execute '!' . join(cmd_list, ' ')
 
     if v:shell_error != 0
         echo "컴파일 실패"
@@ -180,16 +203,19 @@ function! s:GDB()
     if exe == '' | return | endif
 
     botright 12split
-    call term_start(['gdb', '-q', './' . exe], {
+    " term_start 리스트 인자 사용 시 shellescape를 해제하여 경로 인식 차단 현상 방지
+    let buf = term_start(['gdb', '-q', exe], {
         \ 'exit_cb': function('s:GdbExitHandler'),
-        \ 'curwin': 1
+        \ 'curwin': 1,
+        \ 'term_name': 'gdb-inferior'
         \ })
 
-    call feedkeys("break main\nrun\n", 't')
+    " feedkeys 대신 고유 버퍼 ID에 타이밍 유실 없이 직동 제어 키 송신
+    call term_sendkeys(buf, "break main\nrun\n")
 endfunction
 
 " ================================
-" 10. 단축키
+" 10. 단축키 설정
 " ================================
 let mapleader=" "
 
@@ -206,11 +232,13 @@ nnoremap <silent> gy <Plug>(coc-type-definition)
 nnoremap <silent> gi <Plug>(coc-implementation)
 nnoremap <silent> gr <Plug>(coc-references)
 
-" GDB 내부 키
-tnoremap <F10> <C-\><C-n>:call chansend(b:terminal_job_id, "next\n")<CR>
-tnoremap <F11> <C-\><C-n>:call chansend(b:terminal_job_id, "step\n")<CR>
-tnoremap <F12> <C-\><C-n>:call chansend(b:terminal_job_id, "continue\n")<CR>
-tnoremap <leader>b <C-\><C-n>:call chansend(b:terminal_job_id, "break " . expand('%:p') . ":" . line('.') . "\n")<CR>
+" GDB 내부 제어 (비동기 및 입력 복귀 보정 버전)
+tnoremap <F10> <C-\><C-n>:call term_sendkeys(bufnr('%'), "next\n")<CR>i
+tnoremap <F11> <C-\><C-n>:call term_sendkeys(bufnr('%'), "step\n")<CR>i
+tnoremap <F12> <C-\><C-n>:call term_sendkeys(bufnr('%'), "continue\n")<CR>i
+
+" 코드창 연동 기능: 코드 편집 중에 <leader>b를 누르면 활성화된 GDB 세션으로 중단점 직접 전송
+nnoremap <leader>b :call <SID>SendGdbCommand("break " . expand('%:p') . ":" . line('.'))<CR>
 
 " ================================
 " 11. 기타 단축키
@@ -221,12 +249,15 @@ nnoremap <leader>f :Rg<CR>
 
 inoremap jk <Esc>
 inoremap kj <Esc>
-inoremap <expr> <CR> pumvisible() ? coc#_select_confirm() : "\<CR>"
+
+" coc.nvim 공식 추천 가독성 및 안전성 최적화 엔터/탭 매핑
+inoremap <silent><expr> <CR> coc#pum#visible() ? coc#pum#confirm()
+                              \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
 inoremap <expr> <Tab> pumvisible() ? "\<C-n>" : "\<Tab>"
 inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
 
 " ================================
-" 12. WSL 클립보드
+" 12. WSL 클립보드 연동
 " ================================
 let g:clipboard = {
     \ 'name': 'win32yank',
@@ -236,9 +267,8 @@ let g:clipboard = {
     \ }
 
 " ================================
-" 13. 커서 모양 고정
+" 13. 커서 모양 고정 (WSL 윈도우 터미널 가비지 방지)
 " ================================
-" WSL 윈도우 터미널용 커서 설정 (찌꺼기 방지 버전)
 if !has('gui_running')
   " 입력 모드로 들어갈 때: 얇은 바 (5 q)
   let &t_SI = "\<Esc>[5 q"
