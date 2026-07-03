@@ -147,7 +147,13 @@ function! s:Build()
     endif
 
     " 안전한 아규먼트 리스트 빌드 (공백 및 이스케이프 꼬임 방지)
-    let cmd_list = [bin, '-g', '-Wall', '-Wextra']
+    " C++ 빌드 시에만 C++23 표준 및 엄격한 경고 플래그 적용
+    if ext ==# 'c'
+        let cmd_list = [bin, '-g', '-Wall', '-Wextra']
+    else
+        let cmd_list = [bin, '-g', '-std=c++23', '-Wall', '-Wextra', '-Wconversion', '-Wsign-conversion']
+    endif
+
     call extend(cmd_list, map(copy(files), 'shellescape(v:val)'))
     call extend(cmd_list, ['-o', shellescape(exe)])
 
