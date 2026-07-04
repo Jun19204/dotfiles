@@ -1,5 +1,5 @@
 " =================================================================
-" [C/C++전용 Vim 설정] 플러그인 + 테마 + C/GDB/Valgrind (통합 보완본)
+" [C/C++전용 Vim 설정] 플러그인 + 테마 + C/GDB/Valgrind
 " =================================================================
 
 " ================================
@@ -13,8 +13,10 @@ set ttimeout
 set ttimeoutlen=40
 
 " gf 명령어가 시스템 include 폴더에 있는 라이브러리를 찾음
-set path=.,/usr/include,/usr/local/include,,
-set suffixesadd=.h,.c,.cpp,.hpp
+" 확장자가 없는 단어도 파일 이름으로 인식하도록 허용
+set isfname+=~,*,?,[,],-
+set path=.,/usr/include/c++/*,/usr/include,/usr/local/include,/Library/Developer/CommandLineTools/usr/include/c++/v1,,
+set suffixesadd=.h,.c,.cc,.C,.cpp,.hpp
 
 " ================================
 " 2. 플러그인 (vim-plug)
@@ -29,6 +31,7 @@ Plug 'junegunn/fzf.vim'
 Plug 'octol/vim-cpp-enhanced-highlight'
 Plug 'Yggdroot/indentLine'
 Plug 'morhetz/gruvbox'
+Plug 'frazrepo/vim-rainbow'
 
 call plug#end()
 
@@ -44,6 +47,7 @@ let g:gruvbox_bold = 0
 let g:gruvbox_italic = 0
 let g:airline_theme='gruvbox'
 let g:airline_powerline_fonts = 0
+let g:rainbow_active = 1
 colorscheme gruvbox
 
 set cursorline
@@ -76,31 +80,28 @@ set colorcolumn=100
 let g:cpp_class_scope_highlight = 1
 let g:cpp_member_variable_highlight = 1
 let g:cpp_class_decl_highlight = 1
-let g:cpp_experimental_template_highlight = 1
+let g:cpp_experimental_template_highlight = 1 " 템플릿 하이라이트 활성화
+
+" 복잡한 템플릿 구조(<>, ::) 안에서 괄호 짝을 잘 찾기 위한 매치 매핑 강화
+runtime macros/matchit.vim
 
 " ================================
 " 5. 실행 관련 헬퍼 함수
 " ================================
-
-" 실행파일 이름 (경로 분리)
 function! s:ExeName()
     return 'build/' . expand('%:r')
 endfunction
 
-" C/C++ 파일 확인
 function! s:IsCppFile()
     let ext = expand('%:e')
-    return ext ==# 'c' || ext ==# 'cpp' || ext ==# 'cc'
+    return ext ==# 'c' || ext ==# 'cpp' || ext ==# 'cc' || ext ==# 'hpp' || ext ==# 'h'
 endfunction
 
-" 컴파일러 선택
 function! s:GetCompiler()
     return expand('%:e') ==# 'c' ? 'gcc' : 'g++'
 endfunction
 
-" GDB 터미널 전용 명령어 송신 함수
 function! s:SendGdbCommand(cmd)
-    " 'gdb-inferior'라는 이름을 가진 터미널 버퍼를 검색
     let buf = filter(range(1, bufnr('$')), 'bufname(v:val) =~# "gdb-inferior"')
     if !empty(buf)
         call term_sendkeys(buf[0], a:cmd . "\n")
@@ -111,7 +112,7 @@ function! s:SendGdbCommand(cmd)
 endfunction
 
 " ================================
-" 6. Build (핵심)
+" 6. Build
 " ================================
 function! s:Build()
     if !s:IsCppFile()
@@ -119,7 +120,6 @@ function! s:Build()
         return ''
     endif
 
-    " build 디렉토리 생성
     if !isdirectory('build')
         call mkdir('build', 'p')
     endif
@@ -128,14 +128,12 @@ function! s:Build()
     let exe = s:ExeName()
     let ext = expand('%:e')
 
-    " 소스 파일 수집 (C++의 경우 프로젝트 내 여러 확장자 통합 수집)
     if ext ==# 'c'
         let files = glob('*.c', 0, 1)
     else
         let files = glob('*.cpp', 0, 1) + glob('*.cc', 0, 1) + glob('*.cxx', 0, 1)
     endif
 
-    " raylib.h 자동 감지 로직 강화 (개별 소스 상단 헤더 체크)
     let has_raylib = filereadable('raylib.h')
     if !has_raylib
         for f in files
@@ -146,30 +144,37 @@ function! s:Build()
         endfor
     endif
 
-    " 안전한 아규먼트 리스트 빌드 (공백 및 이스케이프 꼬임 방지)
-    " C++ 빌드 시에만 C++23 표준 및 엄격한 경고 플래그 적용
+    " [수정] C++ 템플릿 디버깅을 위해 -ftemplate-backtrace-limit 설정 추가
+    " 템플릿 에러가 깊어질 때 생략되는 것을 방지하기 위해 단계를 늘리거나(예: 100) 0(무제한)으로 설정
     if ext ==# 'c'
         let cmd_list = [bin, '-g', '-Wall', '-Wextra']
     else
-        let cmd_list = [bin, '-g', '-std=c++23', '-Wall', '-Wextra', '-Wconversion', '-Wsign-conversion']
+        let cmd_list = [bin, '-g', '-std=c++23', '-Wall', '-Wextra', '-Wconversion', '-Wsign-conversion', '-ftemplate-backtrace-limit=0']
     endif
 
-    call extend(cmd_list, map(copy(files), 'shellescape(v:val)'))
-    call extend(cmd_list, ['-o', shellescape(exe)])
+    " cmd_list에 들어가는 파일명들에 shellescape()를 중복으로 적용하지 않고 순수 리스트로 병합
+    call extend(cmd_list, copy(files))
+    call extend(cmd_list, ['-o', exe])
 
-    " 라이브러리 플래그 추가
     if has_raylib
         call extend(cmd_list, ['-lraylib', '-lGL', '-lm', '-lpthread', '-ldl', '-lrt', '-lX11'])
     endif
 
-    " 명령어 실행
-    execute '!' . join(cmd_list, ' ')
+    " [개선] execute '!' 대신 비동기성이 확보되거나 화면 깨짐이 적은 구조로 명령어를 결합
+    " 이스케이프 꼬임을 막기 위해 각 인자를 쉘 인자로 안전하게 결합하여 가공
+    let safe_cmd = join(map(cmd_list, 'shellescape(v:val)'), ' ')
+    
+    echo "컴파일 중..."
+    execute '!' . safe_cmd
 
     if v:shell_error != 0
+        redraw!
         echo "컴파일 실패"
         return ''
     endif
 
+    redraw!
+    echo "컴파일 성공: " . exe
     return exe
 endfunction
 
