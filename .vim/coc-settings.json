@@ -1,0 +1,21 @@
+{
+  "clangd.arguments": [
+    "--background-index",
+    "--clang-tidy",
+    "--completion-style=detailed",
+    "--header-insertion=iwyu",
+    "--fallback-style=Chromium",
+    "-query-driver=/usr/bin/g++"
+  ],
+  
+  "clangd.inlayHints.enable": true,
+  "clangd.inlayHints.designators": true,
+  "clangd.inlayHints.parameterNames": true,
+  "clangd.inlayHints.deducedTypes": true,
+
+  "suggest.noselect": true,
+  "suggest.enablePreview": true,
+  "suggest.floatConfig": { "border": true },
+  "diagnostic.floatConfig": { "border": true },
+  "hover.floatConfig": { "border": true }
+}
