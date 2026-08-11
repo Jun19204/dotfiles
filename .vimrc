@@ -1,5 +1,5 @@
 " =================================================================
-" [C/C++전용 Vim 설정] 플러그인 + 테마 + C/GDB/Valgrind
+" [C/C++전용 Vim 설정] 플러그인 + 테마 + CMake/GDB/Valgrind
 " =================================================================
 
 " ================================
@@ -13,7 +13,6 @@ set ttimeout
 set ttimeoutlen=40
 
 " gf 명령어가 시스템 include 폴더에 있는 라이브러리를 찾음
-" 확장자가 없는 단어도 파일 이름으로 인식하도록 허용
 set isfname+=~,*,?,[,],-
 set path=.,/usr/include/c++/*,/usr/include,/usr/local/include,/Library/Developer/CommandLineTools/usr/include/c++/v1,,
 set suffixesadd=.h,.c,.cc,.C,.cpp,.hpp
@@ -55,14 +54,14 @@ highlight CursorLine guibg=#2a2a2a
 highlight ColorColumn guibg=#1f1f1f
 
 " coc.nvim 팝업창 가독성 개선
-highlight CocFloating      ctermbg=235 guibg=#3c3836
-highlight CocErrorFloat    ctermfg=203 guifg=#fb4934
-highlight CocInfoFloat     ctermfg=214 guifg=#fabd2f
-highlight CocWarningFloat  ctermfg=208 guifg=#fe8019
-highlight CocDisabled ctermfg=242 guifg=#665c54
-highlight CocHintFloat ctermfg=250 guifg=#d5c4a1
-highlight CocFadeOut ctermfg=250 guifg=#a89984
-highlight CocUnusedSuggest ctermfg=250 guifg=#a89984
+highlight CocFloating       ctermbg=235 guibg=#3c3836
+highlight CocErrorFloat      ctermfg=203 guifg=#fb4934
+highlight CocInfoFloat       ctermfg=214 guifg=#fabd2f
+highlight CocWarningFloat    ctermfg=208 guifg=#fe8019
+highlight CocDisabled        ctermfg=242 guifg=#665c54
+highlight CocHintFloat       ctermfg=250 guifg=#d5c4a1
+highlight CocFadeOut         ctermfg=250 guifg=#a89984
+highlight CocUnusedSuggest   ctermfg=250 guifg=#a89984
 
 set autoindent
 set smartindent
@@ -80,25 +79,25 @@ set colorcolumn=100
 let g:cpp_class_scope_highlight = 1
 let g:cpp_member_variable_highlight = 1
 let g:cpp_class_decl_highlight = 1
-let g:cpp_experimental_template_highlight = 1 " 템플릿 하이라이트 활성화
+let g:cpp_experimental_template_highlight = 1
 
-" 복잡한 템플릿 구조(<>, ::) 안에서 괄호 짝을 잘 찾기 위한 매치 매핑 강화
 runtime macros/matchit.vim
 
 " ================================
-" 5. 실행 관련 헬퍼 함수
+" 5. CMake 타겟 자동 추적 헬퍼
 " ================================
-function! s:ExeName()
-    return 'build/' . expand('%:r')
-endfunction
-
-function! s:IsCppFile()
-    let ext = expand('%:e')
-    return ext ==# 'c' || ext ==# 'cpp' || ext ==# 'cc' || ext ==# 'hpp' || ext ==# 'h'
-endfunction
-
-function! s:GetCompiler()
-    return expand('%:e') ==# 'c' ? 'gcc' : 'g++'
+" 현재 열린 파일의 상위 폴더 이름(예: Sales_data)을 기준으로 build/ 내 실행 파일 위치를 찾음
+function! s:GetCMakeExe()
+    let l:dir = expand('%:p:h:t')
+    let l:exe_path = 'build/' . l:dir . '/' . l:dir . '_exe'
+    
+    if !filereadable(l:exe_path)
+        let l:found = glob('build/' . l:dir . '/*', 0, 1)
+        let l:executable = filter(l:found, 'executable(v:val) && v:val !~# "\.so$" && v:val !~# "\.a$"')
+        return !empty(l:executable) ? l:executable[0] : ''
+    endif
+    
+    return l:exe_path
 endfunction
 
 function! s:SendGdbCommand(cmd)
@@ -112,117 +111,90 @@ function! s:SendGdbCommand(cmd)
 endfunction
 
 " ================================
-" 6. Build
+" 6. CMake 빌드
 " ================================
-function! s:Build()
-    if !s:IsCppFile()
-        echo "C/C++ 파일이 아님"
-        return ''
-    endif
-
+function! s:CMakeBuild()
     if !isdirectory('build')
         call mkdir('build', 'p')
     endif
 
-    let bin = s:GetCompiler()
-    let exe = s:ExeName()
-    let ext = expand('%:e')
-
-    if ext ==# 'c'
-        let files = glob('*.c', 0, 1)
-    else
-        let files = glob('*.cpp', 0, 1) + glob('*.cc', 0, 1) + glob('*.cxx', 0, 1)
-    endif
-
-    let has_raylib = filereadable('raylib.h')
-    if !has_raylib
-        for f in files
-            if join(readfile(f, '', 30), "\n") =~# 'raylib\.h'
-                let has_raylib = 1
-                break
-            endif
-        endfor
-    endif
-
-    " [수정] C++ 템플릿 디버깅을 위해 -ftemplate-backtrace-limit 설정 추가
-    " 템플릿 에러가 깊어질 때 생략되는 것을 방지하기 위해 단계를 늘리거나(예: 100) 0(무제한)으로 설정
-    if ext ==# 'c'
-        let cmd_list = [bin, '-g', '-Wall', '-Wextra']
-    else
-        let cmd_list = [bin, '-g', '-std=c++23', '-Wall', '-Wextra', '-Wconversion', '-Wsign-conversion', '-ftemplate-backtrace-limit=0']
-    endif
-
-    " cmd_list에 들어가는 파일명들에 shellescape()를 중복으로 적용하지 않고 순수 리스트로 병합
-    call extend(cmd_list, copy(files))
-    call extend(cmd_list, ['-o', exe])
-
-    if has_raylib
-        call extend(cmd_list, ['-lraylib', '-lGL', '-lm', '-lpthread', '-ldl', '-lrt', '-lX11'])
-    endif
-
-    " [개선] execute '!' 대신 비동기성이 확보되거나 화면 깨짐이 적은 구조로 명령어를 결합
-    " 이스케이프 꼬임을 막기 위해 각 인자를 쉘 인자로 안전하게 결합하여 가공
-    let safe_cmd = join(map(cmd_list, 'shellescape(v:val)'), ' ')
-    
-    echo "컴파일 중..."
-    execute '!' . safe_cmd
+    echo "CMake Configure & Build 중..."
+    let l:cmd = 'cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build'
+    execute '!' . l:cmd
 
     if v:shell_error != 0
         redraw!
-        echo "컴파일 실패"
-        return ''
+        echo "CMake 빌드 실패"
+        return 0
+    endif
+
+    " coc.nvim/clangd 자동완성용 심볼릭 링크 자동 생성
+    if filereadable('build/compile_commands.json') && !filereadable('compile_commands.json')
+        call system('ln -s build/compile_commands.json .')
     endif
 
     redraw!
-    echo "컴파일 성공: " . exe
-    return exe
+    echo "CMake 빌드 성공"
+    return 1
 endfunction
 
 " ================================
-" 7. 실행
+" 7. CMake 실행
 " ================================
-function! s:Run()
-    let exe = s:Build()
-    if exe == '' | return | endif
-
-    execute '!./' . shellescape(exe)
-endfunction
-
-" ================================
-" 8. Valgrind
-" ================================
-function! s:Valgrind(type)
-    let exe = s:Build()
-    if exe == '' | return | endif
-
-    if a:type ==# 'full'
-        execute '!valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./' . shellescape(exe)
-    else
-        execute '!valgrind --leak-check=full ./' . shellescape(exe)
+function! s:CMakeRun()
+    if s:CMakeBuild()
+        let l:exe = s:GetCMakeExe()
+        if l:exe ==# ''
+            echo "실행 가능한 바이너리를 찾을 수 없습니다."
+            return
+        endif
+        execute '!./' . shellescape(l:exe)
     endif
 endfunction
 
 " ================================
-" 9. GDB
+" 8. Valgrind 메모리 검사
+" ================================
+function! s:CMakeValgrind(type)
+    if s:CMakeBuild()
+        let l:exe = s:GetCMakeExe()
+        if l:exe ==# ''
+            echo "실행 가능한 바이너리를 찾을 수 없습니다."
+            return
+        endif
+
+        if a:type ==# 'full'
+            execute '!valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./' . shellescape(l:exe)
+        else
+            execute '!valgrind --leak-check=full ./' . shellescape(l:exe)
+        endif
+    endif
+endfunction
+
+" ================================
+" 9. GDB 디버깅
 " ================================
 function! s:GdbExitHandler(job_id, data, event)
     echo "GDB 종료"
 endfunction
 
-function! s:GDB()
-    let exe = s:Build()
-    if exe == '' | return | endif
+function! s:CMakeGDB()
+    if s:CMakeBuild()
+        let l:exe = s:GetCMakeExe()
+        if l:exe ==# ''
+            echo "실행 가능한 바이너리를 찾을 수 없습니다."
+            return
+        endif
 
-    botright 12split
-    " term_start 리스트 인자 사용 시 shellescape를 해제하여 경로 인식 차단 현상 방지
-    let buf = term_start(['gdb', '-q', exe], {
-        \ 'exit_cb': function('s:GdbExitHandler'),
-        \ 'curwin': 1,
-        \ 'term_name': 'gdb-inferior'
-        \ })
+        botright 12split
+        let l:buf = term_start(['gdb', '-q', l:exe], {
+            \ 'exit_cb': function('s:GdbExitHandler'),
+            \ 'curwin': 1,
+            \ 'term_name': 'gdb-inferior'
+            \ })
 
-    " feedkeys 대신 고유 버퍼 ID에 타이밍 유실 없이 직동 제어 키 송신
-    call term_sendkeys(buf, "break main\nrun\n")
+        call term_sendkeys(l:buf, "break main\nrun\n")
+    endif
 endfunction
 
 " ================================
@@ -230,29 +202,30 @@ endfunction
 " ================================
 let mapleader=" "
 
-nnoremap <F5> :w<CR>:call <SID>Run()<CR>
-nnoremap <F6> :w<CR>:call <SID>Build()<CR>
-nnoremap <F7> :w<CR>:call <SID>Valgrind('basic')<CR>
-nnoremap <F8> :w<CR>:call <SID>Valgrind('full')<CR>
-nnoremap <leader>d :w<CR>:call <SID>GDB()<CR>
+" CMake 기반 빌드/실행/Valgrind/GDB 단축키
+nnoremap <F5> :w<CR>:call <SID>CMakeRun()<CR>
+nnoremap <F6> :w<CR>:call <SID>CMakeBuild()<CR>
+nnoremap <F7> :w<CR>:call <SID>CMakeValgrind('basic')<CR>
+nnoremap <F8> :w<CR>:call <SID>CMakeValgrind('full')<CR>
+nnoremap <leader>d :w<CR>:call <SID>CMakeGDB()<CR>
 nnoremap <silent> K :call CocActionAsync('doHover')<CR>
 
 " LSP 기반 코드 탐색 단축키
-nnoremap <silent> gd <Plug>(coc-definition)   
+nnoremap <silent> gd <Plug>(coc-definition)
 nnoremap <silent> gy <Plug>(coc-type-definition)
 nnoremap <silent> gi <Plug>(coc-implementation)
 nnoremap <silent> gr <Plug>(coc-references)
 
-" GDB 내부 제어 (비동기 및 입력 복귀 보정 버전)
+" GDB 내부 제어
 tnoremap <F10> <C-\><C-n>:call term_sendkeys(bufnr('%'), "next\n")<CR>i
 tnoremap <F11> <C-\><C-n>:call term_sendkeys(bufnr('%'), "step\n")<CR>i
 tnoremap <F12> <C-\><C-n>:call term_sendkeys(bufnr('%'), "continue\n")<CR>i
 
-" 코드창 연동 기능: 코드 편집 중에 <leader>b를 누르면 활성화된 GDB 세션으로 중단점 직접 전송
+" 코드창 연동: 현재 줄에 Breakpoint 지정
 nnoremap <leader>b :call <SID>SendGdbCommand("break " . expand('%:p') . ":" . line('.'))<CR>
 
 " ================================
-" 11. 기타 단축키
+" 11. 기타 단축키 및 completion 최적화
 " ================================
 nnoremap <C-n> :NERDTreeToggle<CR>
 nnoremap <C-p> :Files<CR>
@@ -261,11 +234,11 @@ nnoremap <leader>f :Rg<CR>
 inoremap jk <Esc>
 inoremap kj <Esc>
 
-" coc.nvim 공식 추천 가독성 및 안전성 최적화 엔터/탭 매핑
+" coc.nvim 추천 자동완성 매핑
 inoremap <silent><expr> <CR> coc#pum#visible() ? coc#pum#confirm()
                               \: "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
-inoremap <expr> <Tab> pumvisible() ? "\<C-n>" : "\<Tab>"
-inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<S-Tab>"
+inoremap <silent><expr> <Tab> coc#pum#visible() ? coc#pum#next(1) : "\<Tab>"
+inoremap <silent><expr> <S-Tab> coc#pum#visible() ? coc#pum#prev(1) : "\<S-Tab>"
 
 " ================================
 " 12. WSL 클립보드 연동
@@ -281,11 +254,8 @@ let g:clipboard = {
 " 13. 커서 모양 고정 (WSL 윈도우 터미널 가비지 방지)
 " ================================
 if !has('gui_running')
-  " 입력 모드로 들어갈 때: 얇은 바 (5 q)
   let &t_SI = "\<Esc>[5 q"
-  " 입력 모드에서 나갈 때 (일반 모드): 블록 (2 q)
   let &t_EI = "\<Esc>[2 q"
-  " 교체 모드 (Replace): 밑줄 (3 q)
   let &t_SR = "\<Esc>[3 q"
 endif
 
