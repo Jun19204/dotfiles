@@ -4,14 +4,14 @@
     "--clang-tidy",
     "--completion-style=detailed",
     "--header-insertion=iwyu",
-    "--fallback-style=Chromium",
+    "--fallback-style=llvm",
     "-query-driver=/usr/bin/g++"
   ],
-  
-  "clangd.inlayHints.enable": true,
-  "clangd.inlayHints.designators": true,
-  "clangd.inlayHints.parameterNames": true,
-  "clangd.inlayHints.deducedTypes": true,
+
+  "clangd.inlayHints.enable": false,
+  "clangd.inlayHints.designators": false,
+  "clangd.inlayHints.parameterNames": false,
+  "clangd.inlayHints.deducedTypes": false,
 
   "suggest.noselect": true,
   "suggest.enablePreview": true,
