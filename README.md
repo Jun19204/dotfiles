@@ -1,6 +1,4 @@
-                << WSL환경 Vim 설정 >>
-
-## Modern C/C++ Dev Environment (.dotfiles)
+# Modern C/C++ Dev Environment (.dotfiles)
 Modern C++20 및 C 개발 환경 구축을 위한 Vim 및 `coc-clangd` 중심의 통합 설정입니다.  
 CMake, GDB, Valgrind, Inlay Hints 토글, 헤더/소스 고속 스위칭 및 WSL 환경 최적화 설정을 포함합니다.
 
@@ -21,7 +19,7 @@ sudo apt update && sudo apt install -y build-essential cmake gdb valgrind clangd
 
 ## Keybindings Summary
  <leader> 키는 Space(스페이스바)로 설정되어 있습니다.
->> Code & LSP Navigation
+### Code & LSP Navigation
  (Key)        (Description)
 gd    정의로 이동 (Go to Definition)
 gy    타입 정의로 이동 (Go to Type Definition)
@@ -33,7 +31,7 @@ K     심볼/함수 문서 팝업 열기 (Hover Document)
 <F1>    auto 및 매개변수 타입 Inlay Hints 토글 (ON/OFF)
 <F4>    헤더/소스 파일 스위칭 (.h $\leftrightarrow$ .cpp)
 
->> CMake / Build / Debug / Profile
+### CMake / Build / Debug / Profile
  (Key)            (Description)
 <F5>    CMake 자동 빌드 후 바이너리 실행
 <F6>    CMake 프로젝트 빌드 (cmake --build build)
@@ -43,7 +41,7 @@ K     심볼/함수 문서 팝업 열기 (Hover Document)
 <leader>b    현재 커서 위치에 GDB Breakpoint 설정
 <F10> / <F11> / <F12>    GDB 내에서 Next / Step / Continue 실행
 
->> File Management & Utility
+### File Management & Utility
  (Key)            (Description)
 Ctrl + n	NERDTree 파일 탐색기 토글
 Ctrl + p	FZF 파일 이름 고속 검색
@@ -54,10 +52,9 @@ jk or kj	Insert 모드에서 Normal 모드로 탈출
 ------------------------------------------
 
 ## Features & Architecture
->> Standard: C++20 최신 문법, 콘셉트(Concepts), 템플릿 메타프로그래밍 하이라이트 지원
->> Formatter Alignment: Vim 들여쓰기 2칸(shiftwidth=2)과 clangd 포맷터 간격 완벽 동기화
->> Auto Sync: CMake 빌드 시 compile_commands.json 심볼릭 링크 자동 생성으로 LSP 인덱싱 자동 보장
->> WSL Optimization: win32yank 연동으로 Windows-WSL 간 클립보드 공유 및 터미널 커서 모양 가비지 방지
-   EOF
+- Standard: C++20 최신 문법, 콘셉트(Concepts), 템플릿 메타프로그래밍 하이라이트 지원
+- Formatter Alignment: Vim 들여쓰기 2칸(shiftwidth=2)과 clangd 포맷터 간격 완벽 동기화
+- Auto Sync: CMake 빌드 시 compile_commands.json 심볼릭 링크 자동 생성으로 LSP 인덱싱 자동 보장
+- WSL Optimization: win32yank 연동으로 Windows-WSL 간 클립보드 공유 및 터미널 커서 모양 가비지 방지 EOF
 
 
