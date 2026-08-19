@@ -4,20 +4,20 @@ CMake, GDB, Valgrind, Inlay Hints 토글, 헤더/소스 고속 스위칭 및 WSL
 
 ------------------------------------------
 
-## One-Line Installation
+## 📌 One-Line Installation
 새로운 환경이나 다른 서버에서 아래 **단 한 줄의 명령어**를 터미널에 입력하면 모든 설정, 플러그인, `coc-clangd`까지 자동으로 세팅됩니다.
 ```bash
 git clone [https://github.com/Jun19204/dotfiles.git](https://github.com/Jun19204/dotfiles.git) ~/dotfiles && ~/dotfiles/install.sh
 ```
 ------------------------------------------
 
-## 필수 의존성 (Ubuntu/WSL 사전 설치 권장)
+## 📌 필수 의존성 (Ubuntu/WSL 사전 설치 권장)
 ```bash
 sudo apt update && sudo apt install -y build-essential cmake gdb valgrind clangd ripgrep win32yank
 ```
 ------------------------------------------
 
-## Keybindings Summary
+## 📌 Keybindings Summary
  <leader> 키는 Space(스페이스바)로 설정되어 있습니다.
 ### Code & LSP Navigation
 | Key | Description |
@@ -54,7 +54,7 @@ sudo apt update && sudo apt install -y build-essential cmake gdb valgrind clangd
 
 ------------------------------------------
 
-## Features & Architecture
+## 📌 Features & Architecture
 - Standard: C++20 최신 문법, 콘셉트(Concepts), 템플릿 메타프로그래밍 하이라이트 지원
 - Formatter Alignment: Vim 들여쓰기 2칸(shiftwidth=2)과 clangd 포맷터 간격 완벽 동기화
 - Auto Sync: CMake 빌드 시 compile_commands.json 심볼릭 링크 자동 생성으로 LSP 인덱싱 자동 보장
