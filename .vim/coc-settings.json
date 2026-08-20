@@ -1,4 +1,7 @@
 {
+  "inlayHint.enable": true,
+  "inlayHint.display": false,
+
   "semanticTokens.enable": false,
 
   "clangd.arguments": [
