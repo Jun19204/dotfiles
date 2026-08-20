@@ -39,6 +39,7 @@ Plug 'Yggdroot/indentLine'
 Plug 'morhetz/gruvbox'
 Plug 'frazrepo/vim-rainbow'
 Plug 'derekwyatt/vim-fswitch' " C/C++ 헤더-소스 파일 고속 전환
+Plug 'pboettch/vim-cmake-syntax' " CMake 전용 구문 강조
 
 call plug#end()
 
