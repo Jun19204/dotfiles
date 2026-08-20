@@ -228,29 +228,9 @@ endfunction
 " ================================
 let mapleader=" "
 
-" Inlay Hints (auto 타입 표시) Toggle
-let g:coc_inlay_hints_enabled = 0
+" F1 키로 Inlay Hints 즉시 토글 (CocRestart 없이 내장 토글 기능 사용)
+nnoremap <F1> :CocCommand document.toggleInlayHint<CR>
 
-function! ToggleInlayHints()
-  if g:coc_inlay_hints_enabled
-    let g:coc_inlay_hints_enabled = 0
-    call coc#config('clangd.inlayHints.enable', v:false)
-    call coc#config('clangd.inlayHints.parameterNames', v:false)
-    call coc#config('clangd.inlayHints.deducedTypes', v:false)
-    echo "Inlay Hints: OFF"
-  else
-    let g:coc_inlay_hints_enabled = 1
-    call coc#config('clangd.inlayHints.enable', v:true)
-    call coc#config('clangd.inlayHints.parameterNames', v:true)
-    call coc#config('clangd.inlayHints.deducedTypes', v:true)
-    echo "Inlay Hints: ON"
-  endif
-  " 변경된 LSP 설정 적용을 위해 서버 재시작
-  silent! CocRestart
-endfunction
-
-" F1 키로 인라인 힌트 켜기 / 끌기
-nnoremap <F1> :call ToggleInlayHints()<CR>
 " F4: 헤더/소스 파일(.h <-> .cpp) 즉시 전환
 nnoremap <F4> :FSHere<CR>
 
@@ -268,6 +248,7 @@ nnoremap <silent> gy <Plug>(coc-type-definition)
 nnoremap <silent> gi <Plug>(coc-implementation)
 nnoremap <silent> gr <Plug>(coc-references)
 nnoremap <leader>rn <Plug>(coc-rename)
+
 " 전체 코드 LSP/clang-format 정렬 (Space + c + f)
 " Format Provider가 없는 경우 일반 gg=G 로 fallback 처리
 nnoremap <silent> <leader>cf :call FormatCode()<CR>
