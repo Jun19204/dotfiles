@@ -9,7 +9,8 @@ echo " Checking required system packages (clangd, nodejs, curl)..."
 MISSING_PACKAGES=()
 
 if ! command -v clangd &> /dev/null; then
-    MISSING_PACKAGES+=("clangd")
+    # Fedora에서 clangd는 clang-tools-extra 패키지에 포함되어 있습니다.
+    MISSING_PACKAGES+=("clang-tools-extra")
 fi
 
 if ! command -v node &> /dev/null; then
@@ -22,8 +23,7 @@ fi
 
 if [ ${#MISSING_PACKAGES[@]} -ne 0 ]; then
     echo " Installing missing packages: ${MISSING_PACKAGES[*]}..."
-    sudo apt update
-    sudo apt install -y "${MISSING_PACKAGES[@]}"
+    sudo dnf install -y "${MISSING_PACKAGES[@]}"
 else
     echo " All required packages are already installed."
 fi
