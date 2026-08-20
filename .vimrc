@@ -15,7 +15,7 @@ set ttimeoutlen=40
 " gf 명령어가 시스템 include 폴더에 있는 라이브러리를 찾음
 set isfname+=~,*,?,[,],-
 set path=.,/usr/include/c++/*,/usr/include,/usr/local/include,/Library/Developer/CommandLineTools/usr/include/c++/v1,,
-  set suffixesadd=.h,.c,.cc,.C,.cpp,.hpp
+set suffixesadd=.h,.c,.cc,.C,.cpp,.hpp
 
 " 검색 및 분할창 편의 옵션
 set ignorecase
@@ -41,12 +41,26 @@ Plug 'frazrepo/vim-rainbow'
 Plug 'derekwyatt/vim-fswitch' " C/C++ 헤더-소스 파일 고속 전환
 Plug 'pboettch/vim-cmake-syntax' " CMake 전용 구문 강조
 
+" coc.nvim 기본 시맨틱 하이라이팅 간섭 방지 (plug#end() 이전에 설정되어야 적용됨)
+let g:coc_default_semantic_highlight_groups = 0
+
 call plug#end()
 
 " ================================
-" 3. UI / 테마
+" 3. UI / 테마 & 파일타입 설정
 " ================================
+filetype plugin indent on
 syntax on
+
+" CMake 파일 타입 감지 및 하이라이트 동기화
+autocmd BufNewFile,BufRead CMakeLists.txt,*.cmake setlocal filetype=cmake
+autocmd FileType cmake syntax on
+
+" CMake 명령어(set, enable_testing, add_executable 등) 색상을 문자열("") 색상과 동일하게 설정
+autocmd FileType cmake highlight link cmakeCommand String
+autocmd FileType cmake highlight link cmakeStatement String
+autocmd FileType cmake highlight link cmakeCommandStart String
+
 set number
 set termguicolors
 set background=dark

@@ -1,4 +1,6 @@
 {
+  "semanticTokens.enable": false,
+
   "clangd.arguments": [
     "--background-index",
     "--clang-tidy",
