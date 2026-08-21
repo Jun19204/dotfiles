@@ -1,13 +1,13 @@
 # Modern C/C++ Dev Environment (.dotfiles)
 Modern C++20 및 C 개발 환경 구축을 위한 Vim 및 `coc-clangd` 중심의 통합 설정입니다.  
-CMake, GDB, Valgrind, Inlay Hints 토글, 헤더/소스 고속 스위칭 및 WSL 환경 최적화 설정을 포함합니다.
+CMake, GDB, ASan, Valgrind, Inlay Hints 토글, 헤더/소스 고속 스위칭 및 WSL 환경 최적화 설정을 포함합니다.
 
 ------------------------------------------
 
 ## 📌 One-Line Installation
 새로운 환경이나 다른 서버에서 아래 **단 한 줄의 명령어**를 터미널에 입력하면 모든 설정, 플러그인, `coc-clangd`까지 자동으로 세팅됩니다.
 ```bash
-git clone [https://github.com/Jun19204/dotfiles.git](https://github.com/Jun19204/dotfiles.git) ~/dotfiles && ~/dotfiles/install.sh
+git clone https://github.com/Jun19204/dotfiles.git ~/dotfiles && ~/dotfiles/install_for_fedora.sh
 ```
 ------------------------------------------
 
@@ -35,10 +35,11 @@ sudo apt update && sudo apt install -y build-essential cmake gdb valgrind clangd
 ### CMake / Build / Debug / Profile
 | Key | Description |
 | :--- | :--- |
-| `<F5>` | CMake 자동 빌드 후 바이너리 실행 |
-| `<F6>` | CMake 프로젝트 빌드 (cmake --build build) |
-| `<F7>` | Valgrind 누수 검사 (기본) |
-| `<F8>` | Valgrind 메모리 전체 검사 (--leak-check=full) |
+| `<F5>` | CMake 빌드 (ASan 활성화 옵션 포함) |
+| `<F6>` | CMake 빌드 + 바이너리 실행 (ASan 활성화 옵션 포함) |
+| `<F7>` | ASan 검사 실행 |
+| `<F8>` | Valgrind용 빌드 (Valgrind 검사를 위해 ASan 비활성화) |
+| `<F9>` | Valgrind 메모리 전체 검사 (--leak-check=full) |
 | `<leader>d` | GDB 디버거 실행 (하단 분할 터미널 창) |
 | `<leader>b` | 현재 커서 위치에 GDB Breakpoint 설정 |
 | `<F10> / <F11> / <F12>` | GDB 내에서 Next / Step / Continue 실행 |
