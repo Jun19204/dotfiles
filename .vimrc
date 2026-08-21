@@ -1,5 +1,5 @@
 " =================================================================
-" [C/C++전용 Vim 설정] 플러그인 + 테마 + CMake/GDB/Valgrind
+" [C/C++전용 Vim 설정] 플러그인 + 테마 + CMake/GDB/ASan/Valgrind
 " =================================================================
 
 " ================================
@@ -137,15 +137,17 @@ function! s:SendGdbCommand(cmd)
 endfunction
 
 " ================================
-" 6. CMake 빌드
+" 6. CMake 빌드 (ASan 제어)
 " ================================
-function! s:CMakeBuild()
+function! s:CMakeBuild(use_sanitizer)
   if !isdirectory('build')
     call mkdir('build', 'p')
   endif
 
-  echo "CMake Configure & Build 중..."
-  let l:cmd = 'cmake -B build -DCMAKE_BUILD_TYPE=Debug && cmake --build build'
+  let l:san_flag = a:use_sanitizer ? '-DUSE_SANITIZER=ON' : '-DUSE_SANITIZER=OFF'
+  echo "CMake Configure & Build 중... (" . (a:use_sanitizer ? "ASan ON" : "Valgrind용 ASan OFF") . ")"
+
+  let l:cmd = 'cmake -B build -DCMAKE_BUILD_TYPE=Debug ' . l:san_flag . ' && cmake --build build'
   execute '!' . l:cmd
 
   if v:shell_error != 0
@@ -165,52 +167,50 @@ function! s:CMakeBuild()
 endfunction
 
 " ================================
-" 7. CMake 실행
+" 7. CMake 실행 및 검사 (ASan / Valgrind)
 " ================================
-function! s:CMakeRun()
-  if s:CMakeBuild()
+" F6: ASan 빌드 + 실행
+function! s:CMakeASanRun()
+  if s:CMakeBuild(1)
     let l:exe = s:GetCMakeExe()
-    if l:exe ==# ''
-      echo "실행 가능한 바이너리를 찾을 수 없습니다."
-      return
-    endif
+    if l:exe ==# '' | echo "실행 바이너리를 찾을 수 없습니다." | return | endif
     execute '!' . shellescape(l:exe)
   endif
 endfunction
 
-" ================================
-" 8. Valgrind 메모리 검사
-" ================================
-function! s:CMakeValgrind(type)
-  if s:CMakeBuild()
-    let l:exe = s:GetCMakeExe()
-    if l:exe ==# ''
-      echo "실행 가능한 바이너리를 찾을 수 없습니다."
-      return
-    endif
-
-    if a:type ==# 'full'
-      execute '!valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ' . shellescape(l:exe)
-    else
-      execute '!valgrind --leak-check=full ' . shellescape(l:exe)
-    endif
+" F7: ASan 검사 실행 (바이너리가 없으면 자동 ASan 빌드 후 실행)
+function! s:CMakeASanCheck()
+  let l:exe = s:GetCMakeExe()
+  if l:exe ==# '' || !filereadable(l:exe)
+    call s:CMakeASanRun()
+    return
   endif
+  echo "AddressSanitizer 모드로 검사 실행..."
+  execute '!' . shellescape(l:exe)
+endfunction
+
+" F9: Valgrind 상세 검사 실행 (바이너리가 없으면 Valgrind용 재빌드 후 실행)
+function! s:CMakeValgrindRun()
+  let l:exe = s:GetCMakeExe()
+  if l:exe ==# '' || !filereadable(l:exe)
+    if !s:CMakeBuild(0) | return | endif
+    let l:exe = s:GetCMakeExe()
+  endif
+  echo "Valgrind 상세 메모리 검사 실행..."
+  execute '!valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ' . shellescape(l:exe)
 endfunction
 
 " ================================
-" 9. GDB 디버깅
+" 8. GDB 디버깅
 " ================================
 function! s:GdbExitHandler(job_id, data, event)
   echo "GDB 종료"
 endfunction
 
 function! s:CMakeGDB()
-  if s:CMakeBuild()
+  if s:CMakeBuild(1)
     let l:exe = s:GetCMakeExe()
-    if l:exe ==# ''
-      echo "실행 가능한 바이너리를 찾을 수 없습니다."
-      return
-    endif
+    if l:exe ==# '' | echo "실행 바이너리를 찾을 수 없습니다." | return | endif
 
     botright 12split
     let l:buf = term_start(['gdb', '-q', l:exe], {
@@ -224,21 +224,22 @@ function! s:CMakeGDB()
 endfunction
 
 " ================================
-" 10. 단축키 설정
+" 9. 단축키 설정
 " ================================
 let mapleader=" "
 
-" F1 키로 Inlay Hints 즉시 토글 (CocRestart 없이 내장 토글 기능 사용)
+" F1: Inlay Hints 토글 
 nnoremap <F1> :CocCommand document.toggleInlayHint<CR>
 
 " F4: 헤더/소스 파일(.h <-> .cpp) 즉시 전환
 nnoremap <F4> :FSHere<CR>
 
-" CMake 기반 빌드/실행/Valgrind/GDB 단축키
-nnoremap <F5> :w<CR>:call <SID>CMakeRun()<CR>
-nnoremap <F6> :w<CR>:call <SID>CMakeBuild()<CR>
-nnoremap <F7> :w<CR>:call <SID>CMakeValgrind('basic')<CR>
-nnoremap <F8> :w<CR>:call <SID>CMakeValgrind('full')<CR>
+" CMake 빌드/실행/ASan/Valgrind/GDB 단축키
+nnoremap <F5> :w<CR>:call <SID>CMakeBuild(1)<CR>
+nnoremap <F6> :w<CR>:call <SID>CMakeASanRun()<CR>
+nnoremap <F7> :w<CR>:call <SID>CMakeASanCheck()<CR>
+nnoremap <F8> :w<CR>:call <SID>CMakeBuild(0)<CR>
+nnoremap <F9> :w<CR>:call <SID>CMakeValgrindRun()<CR>
 nnoremap <leader>d :w<CR>:call <SID>CMakeGDB()<CR>
 nnoremap <silent> K :call CocActionAsync('doHover')<CR>
 
@@ -274,7 +275,7 @@ nnoremap <leader>b :call <SID>SendGdbCommand("break " . expand('%:p') . ":" . li
 nnoremap <silent> <Esc><Esc> :nohlsearch<CR>
 
 " ================================
-" 11. 기타 단축키 및 completion 최적화
+" 10. 기타 단축키 및 completion 최적화
 " ================================
 nnoremap <C-n> :NERDTreeToggle<CR>
 nnoremap <C-p> :Files<CR>
@@ -290,7 +291,7 @@ inoremap <silent><expr> <Tab> coc#pum#visible() ? coc#pum#next(1) : "\<Tab>"
 inoremap <silent><expr> <S-Tab> coc#pum#visible() ? coc#pum#prev(1) : "\<S-Tab>"
 
 " ================================
-" 12. vim-fswitch 세부 경로 설정
+" 11. vim-fswitch 세부 경로 설정
 " ================================
 " .cpp 파일에서 .h 파일을 찾을 경로 지정 (include, ../include 등)
 au BufEnter *.cpp,*.cc,*.c let b:fswitchdst = 'h,hpp' | let b:fswitchlocs = 'reg:|src|include|,reg:|src|../include|,../include,.'
@@ -298,7 +299,7 @@ au BufEnter *.cpp,*.cc,*.c let b:fswitchdst = 'h,hpp' | let b:fswitchlocs = 'reg
 au BufEnter *.h,*.hpp let b:fswitchdst = 'cpp,cc,c' | let b:fswitchlocs = 'reg:|include|src|,reg:|include|../src|,../src,.'
 
 " ================================
-" 13. WSL 클립보드 연동
+" 12. WSL 클립보드 연동
 " ================================
 let g:clipboard = {
       \ 'name': 'win32yank',
@@ -308,7 +309,7 @@ let g:clipboard = {
       \ }
 
 " ================================
-" 14. 커서 모양 고정 (WSL 윈도우 터미널 가비지 방지)
+" 13. 커서 모양 고정 (WSL 윈도우 터미널 가비지 방지)
 " ================================
 if !has('gui_running')
   let &t_SI = "\<Esc>[5 q"
