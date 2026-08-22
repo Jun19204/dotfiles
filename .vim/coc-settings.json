@@ -1,9 +1,4 @@
 {
-  "inlayHint.enable": true,
-  "inlayHint.display": false,
-
-  "semanticTokens.enable": false,
-
   "clangd.arguments": [
     "--background-index",
     "--clang-tidy",
@@ -13,10 +8,13 @@
     "-query-driver=/usr/bin/g++"
   ],
 
-  "clangd.inlayHints.enable": false,
-  "clangd.inlayHints.designators": false,
-  "clangd.inlayHints.parameterNames": false,
-  "clangd.inlayHints.deducedTypes": false,
+  "inlayHint.enable": true,
+  "clangd.inlayHints.enable": true,
+  "clangd.inlayHints.designators": true,
+  "clangd.inlayHints.parameterNames": true,
+  "clangd.inlayHints.deducedTypes": true,
+
+  "semanticTokens.enable": true,
 
   "suggest.noselect": true,
   "suggest.enablePreview": true,
