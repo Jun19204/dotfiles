@@ -1,65 +1,91 @@
 " =================================================================
-" C/C++ 전용 Vim 설정
-" C++20/23 + CMake / CTest / GTest / GDB / ASan / Valgrind
+" C/C++ Vim Configuration
+"
+" C++20/23
+" CMake / CTest / GoogleTest
+" CMake File API
+" ASan / Valgrind / GDB
+"
+" Build:
+"   build-asan/
+"   build-valgrind/
 " =================================================================
 
-" ================================
-" 1. 기본 설정 및 편집 옵션
-" ================================
+
+" =================================================================
+" 1. Basic
+" =================================================================
+
 set nocompatible
+
 set encoding=utf-8
 set fileencodings=utf-8,cp949
 scriptencoding utf-8
+
 set ttimeout
 set ttimeoutlen=40
-" gf 명령어가 시스템 include 폴더의 라이브러리를 찾도록 설정
+
+" gf system include
 set isfname+=~,*,?,[,],-
 set path=.,/usr/include/c++/*,/usr/include,/usr/local/include,,
 set suffixesadd=.h,.c,.cc,.C,.cpp,.hpp
-" 검색 및 분할창 편의 옵션
+
+" Search / Split
 set ignorecase
 set smartcase
 set autoread
 set splitbelow
 set splitright
 
-" ================================
-" 2. 플러그인
-" ================================
+
+" =================================================================
+" 2. Plugins
+" =================================================================
+
 call plug#begin('~/.vim/plugged')
+
 Plug 'preservim/nerdtree'
 Plug 'neoclide/coc.nvim', {'branch': 'release'}
 Plug 'vim-airline/vim-airline'
-Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }
+
+Plug 'junegunn/fzf', {'do': { -> fzf#install() }}
 Plug 'junegunn/fzf.vim'
+
 Plug 'Yggdroot/indentLine'
 Plug 'morhetz/gruvbox'
 Plug 'derekwyatt/vim-fswitch'
 Plug 'pboettch/vim-cmake-syntax'
-" coc.nvim semantic highlighting
-let g:coc_default_semantic_highlight_groups = 1
+
 call plug#end()
 
-" ================================
-" 3. UI / 테마 / 편집 설정
-" ================================
+
+" =================================================================
+" 3. UI / Theme
+" =================================================================
+
 filetype plugin indent on
 syntax on
 
 set number
 set cursorline
+set signcolumn=yes
+set colorcolumn=100
+
 set termguicolors
 set background=dark
 
 let g:gruvbox_contrast_dark = 'medium'
 let g:gruvbox_bold = 0
 let g:gruvbox_italic = 0
+
+colorscheme gruvbox
+
 let g:airline_theme = 'gruvbox'
 let g:airline_powerline_fonts = 0
+
 let g:vim_json_conceal = 0
 set conceallevel=0
 
-colorscheme gruvbox
 augroup CustomHighlights
   autocmd!
   autocmd ColorScheme gruvbox highlight CursorLine guibg=#2a2a2a
@@ -74,6 +100,11 @@ augroup CustomHighlights
   autocmd ColorScheme gruvbox highlight CocUnusedSuggest ctermfg=250 guifg=#a89984
 augroup END
 
+
+" =================================================================
+" 4. Editing
+" =================================================================
+
 let g:indentLine_char = '┊'
 let g:indentLine_color_gui = '#504945'
 
@@ -82,494 +113,762 @@ set cindent
 set tabstop=2
 set shiftwidth=2
 set expandtab
+
 set completeopt=noinsert,menuone
 set clipboard=unnamedplus
-set signcolumn=yes
-set colorcolumn=100
 
-" ================================
-" 4. CMake / GTest / GDB 헬퍼
-" ================================
-" GDB 터미널 버퍼 ID 추적용 변수
+
+" =================================================================
+" 5. Build Profiles / State
+" =================================================================
+
+let s:profiles = {
+      \ 'asan': {
+      \   'build_dir': 'build-asan',
+      \   'cmake_args': [
+      \     '-DCMAKE_BUILD_TYPE=Debug',
+      \     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+      \     '-DUSE_SANITIZER=ON'
+      \   ],
+      \   'compile_commands': 1
+      \ },
+      \ 'valgrind': {
+      \   'build_dir': 'build-valgrind',
+      \   'cmake_args': [
+      \     '-DCMAKE_BUILD_TYPE=Debug',
+      \     '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
+      \     '-DUSE_SANITIZER=OFF'
+      \   ],
+      \   'compile_commands': 0
+      \ }
+      \ }
+
+let s:selected_targets = {
+      \ 'executable': '',
+      \ 'test': ''
+      \ }
+
 let s:gdb_bufnr = -1
 
-" -------------------------------------------------
-" 일반 실행 파일 추적
-" *_test 바이너리는 제외
-" -------------------------------------------------
-function! s:GetCMakeExe()
-  if !isdirectory('build')
+
+function! s:GetProfile(name) abort
+  return get(s:profiles, a:name, {})
+endfunction
+
+
+" =================================================================
+" 6. CMake File API
+" =================================================================
+
+function! s:PrepareCMakeFileAPI(build_dir) abort
+  let l:dir = a:build_dir . '/.cmake/api/v1/query/client-vim'
+  call mkdir(l:dir, 'p')
+  call writefile([], l:dir . '/codemodel-v2')
+endfunction
+
+
+function! s:GetCodeModelReply(build_dir) abort
+  let l:dir = a:build_dir . '/.cmake/api/v1/reply'
+
+  if !isdirectory(l:dir)
     return ''
   endif
-  let l:all_files = glob('build/**/*', 0, 1)
-  let l:executables = filter(
-        \ l:all_files,
-        \ 'filereadable(v:val) && executable(v:val) && ' .
-        \ 'v:val !~# "\.\\(so\\|a\\|o\\|cmake\\|check\\|json\\|ninja\\|txt\\|log\\|make\\|internal\\|marks\\)$" && ' .
-        \ 'v:val !~# "/CMakeFiles/" && ' .
-        \ 'v:val !~# "_test$"'
-        \ )
-  if empty(l:executables)
+
+  let l:files = glob(l:dir . '/codemodel-v2-*.json', 0, 1)
+
+  if empty(l:files)
     return ''
   endif
-  if len(l:executables) == 1
-    return l:executables[0]
+
+  call sort(l:files, { a, b -> getftime(a) - getftime(b) })
+  return l:files[-1]
+endfunction
+
+
+function! s:GetExecutableTargets(build_dir) abort
+  let l:reply = s:GetCodeModelReply(a:build_dir)
+
+  if empty(l:reply)
+    return []
   endif
-  " 가장 최근 수정된 실행 파일 선택
-  let l:latest_exe = l:executables[0]
-  let l:max_mtime = getftime(l:latest_exe)
-  for l:exe in l:executables
-    let l:mtime = getftime(l:exe)
-    if l:mtime > l:max_mtime
-      let l:max_mtime = l:mtime
-      let l:latest_exe = l:exe
-    endif
+
+  try
+    let l:model = json_decode(join(readfile(l:reply), "\n"))
+  catch
+    echoerr 'CMake CodeModel JSON 파싱 실패'
+    return []
+  endtry
+
+  let l:targets = []
+
+  for l:config in get(l:model, 'configurations', [])
+    for l:ref in get(l:config, 'targets', [])
+      if !has_key(l:ref, 'jsonFile')
+        continue
+      endif
+
+      let l:file = fnamemodify(l:reply, ':h') . '/' . l:ref.jsonFile
+
+      if !filereadable(l:file)
+        continue
+      endif
+
+      try
+        let l:target = json_decode(join(readfile(l:file), "\n"))
+      catch
+        continue
+      endtry
+
+      if get(l:target, 'type', '') !=# 'EXECUTABLE'
+        continue
+      endif
+
+      let l:artifacts = get(l:target, 'artifacts', [])
+
+      if empty(l:artifacts)
+        continue
+      endif
+
+      let l:path = l:artifacts[0].path
+
+      if l:path !~# '^/'
+        let l:path = a:build_dir . '/' . l:path
+      endif
+
+      let l:path = resolve(fnamemodify(l:path, ':p'))
+
+      if executable(l:path)
+        call add(l:targets, {
+              \ 'name': l:target.name,
+              \ 'path': l:path
+              \ })
+      endif
+    endfor
   endfor
-  return l:latest_exe
+
+  return l:targets
 endfunction
 
-" -------------------------------------------------
-" GTest 바이너리 추적
-" *_test
-" -------------------------------------------------
-function! s:GetGTestExe()
-  if !isdirectory('build')
-    return ''
-  endif
-  let l:module = expand('%:p:h:t')
-  if l:module ==# 'tests'
-    let l:module = expand('%:p:h:h:t')
-  endif
-  " 현재 모듈 테스트 우선
-  let l:target_test = glob(
-        \ 'build/**/' . l:module . '_test',
-        \ 0,
-        \ 1
-        \ )
-  if !empty(l:target_test) && executable(l:target_test[0])
-    return l:target_test[0]
-  endif
-  let l:all_tests = filter(
-        \ glob('build/**/*', 0, 1),
-        \ 'filereadable(v:val) && executable(v:val) && v:val =~# "_test$"'
-        \ )
-  if empty(l:all_tests)
-    return ''
-  endif
-  let l:latest_test = l:all_tests[0]
-  let l:max_mtime = getftime(l:latest_test)
-  for l:test in l:all_tests
-    let l:mtime = getftime(l:test)
-    if l:mtime > l:max_mtime
-      let l:max_mtime = l:mtime
-      let l:latest_test = l:test
-    endif
-  endfor
-  return l:latest_test
-endfunction
 
-" -------------------------------------------------
-" 현재 Vim이 관리하는 build 모드
-"
-" asan
-" valgrind
-"
-" build/.vim_build_mode
-" -------------------------------------------------
-function! s:GetBuildMode()
-  let l:mode_file = 'build/.vim_build_mode'
-  if !filereadable(l:mode_file)
-    return ''
-  endif
-  let l:mode = readfile(l:mode_file)
-  if empty(l:mode)
-    return ''
-  endif
-  return l:mode[0]
-endfunction
+" =================================================================
+" 7. CTest
+" =================================================================
 
-function! s:SetBuildMode(mode)
-  if !isdirectory('build')
-    call mkdir('build', 'p')
+function! s:GetCTestJSON(build_dir) abort
+  if !isdirectory(a:build_dir)
+    return {}
   endif
-  call writefile(
-        \ [a:mode],
-        \ 'build/.vim_build_mode'
-        \ )
-endfunction
 
-" -------------------------------------------------
-" 실행 중인 GDB 터미널에 명령 전달 (버퍼 번호 기반)
-" -------------------------------------------------
-function! s:SendGdbCommand(cmd)
-  if s:gdb_bufnr != -1 && bufexists(s:gdb_bufnr)
-    call term_sendkeys(
-          \ s:gdb_bufnr,
-          \ a:cmd . "\n"
-          \ )
-  else
-    echo "실행 중인 GDB 터미널을 찾을 수 없습니다."
-  endif
-endfunction
-
-" ================================
-" 5. CMake Build
-" ================================
-" -------------------------------------------------
-" use_sanitizer = 1
-"   USE_SANITIZER=ON
-"   build mode = asan
-"
-" use_sanitizer = 0
-"   USE_SANITIZER=OFF
-"   build mode = valgrind
-" -------------------------------------------------
-function! s:CMakeBuild(use_sanitizer)
-  if !isdirectory('build')
-    call mkdir('build', 'p')
-  endif
-  let l:san_flag =
-        \ a:use_sanitizer
-        \ ? '-DUSE_SANITIZER=ON'
-        \ : '-DUSE_SANITIZER=OFF'
-  let l:build_mode =
-        \ a:use_sanitizer
-        \ ? 'asan'
-        \ : 'valgrind'
-  echo "CMake Configure & Build 중... (" .
-        \ (a:use_sanitizer
-        \ ? "ASan ON"
-        \ : "ASan OFF / Valgrind용")
-        \ . ")"
   let l:cmd =
-        \ 'cmake -B build ' .
-        \ '-DCMAKE_BUILD_TYPE=Debug ' .
-        \ '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON ' .
-        \ l:san_flag .
-        \ ' && cmake --build build'
-  execute '!' . l:cmd
+        \ 'ctest --test-dir '
+        \ . shellescape(a:build_dir)
+        \ . ' --show-only=json-v1'
+
+  let l:output = system(l:cmd)
+
   if v:shell_error != 0
-    redraw!
-    echo "CMake 빌드 실패"
+    return {}
+  endif
+
+  try
+    return json_decode(l:output)
+  catch
+    echoerr 'CTest JSON 파싱 실패'
+    return {}
+  endtry
+endfunction
+
+
+function! s:NormalizePath(path, base) abort
+  if empty(a:path)
+    return ''
+  endif
+
+  if a:path =~# '^/'
+    return resolve(fnamemodify(a:path, ':p'))
+  endif
+
+  return resolve(fnamemodify(a:base . '/' . a:path, ':p'))
+endfunction
+
+
+function! s:GetTestTargets(build_dir) abort
+  let l:ctest = s:GetCTestJSON(a:build_dir)
+
+  if empty(l:ctest) || !has_key(l:ctest, 'tests')
+    return []
+  endif
+
+  let l:map = {}
+
+  for l:target in s:GetExecutableTargets(a:build_dir)
+    let l:path = resolve(fnamemodify(l:target.path, ':p'))
+
+    let l:map[l:path] = {
+          \ 'name': l:target.name,
+          \ 'path': l:path,
+          \ 'tests': []
+          \ }
+  endfor
+
+  let l:default_base = resolve(fnamemodify(a:build_dir, ':p'))
+
+  for l:test in l:ctest.tests
+    let l:command = get(l:test, 'command', [])
+
+    if empty(l:command)
+      continue
+    endif
+
+    let l:base = get(
+          \ l:test,
+          \ 'workingDirectory',
+          \ l:default_base
+          \ )
+
+    let l:path = s:NormalizePath(l:command[0], l:base)
+
+    if has_key(l:map, l:path)
+      call add(
+            \ l:map[l:path].tests,
+            \ get(l:test, 'name', '(unnamed)')
+            \ )
+    endif
+  endfor
+
+  return filter(values(l:map), { _, target -> !empty(target.tests) })
+endfunction
+
+
+" =================================================================
+" 8. compile_commands.json
+" =================================================================
+
+function! s:UpdateCompileCommands(build_dir) abort
+  let l:source = a:build_dir . '/compile_commands.json'
+
+  if !filereadable(l:source)
+    return
+  endif
+
+  call system(
+        \ 'ln -sfn '
+        \ . shellescape(l:source)
+        \ . ' '
+        \ . shellescape('compile_commands.json')
+        \ )
+
+  if v:shell_error != 0
+    echoerr 'compile_commands.json 심볼릭 링크 생성 실패'
+  endif
+endfunction
+
+
+" =================================================================
+" 9. Builder
+" =================================================================
+
+function! s:Build(profile_name) abort
+  let l:profile = s:GetProfile(a:profile_name)
+
+  if empty(l:profile)
+    echoerr '알 수 없는 Build Profile: ' . a:profile_name
     return 0
   endif
-  " 빌드 성공한 경우에만 상태 기록
-  call s:SetBuildMode(l:build_mode)
-  " clangd용 compile_commands.json 강제 덮어쓰기 링크 (ln -sf 사용)
-  if filereadable('build/compile_commands.json')
-    call system(
-          \ 'ln -sf build/compile_commands.json .'
-          \ )
+
+  let l:build_dir = l:profile.build_dir
+
+  call mkdir(l:build_dir, 'p')
+  call s:PrepareCMakeFileAPI(l:build_dir)
+
+  echo 'CMake Configure & Build 중...'
+  echo 'Profile: ' . a:profile_name
+  echo 'Build directory: ' . l:build_dir
+
+  let l:args = join(
+        \ map(copy(l:profile.cmake_args), 'shellescape(v:val)'),
+        \ ' '
+        \ )
+
+  let l:cmd =
+        \ 'cmake -S . -B '
+        \ . shellescape(l:build_dir)
+        \ . ' '
+        \ . l:args
+        \ . ' && cmake --build '
+        \ . shellescape(l:build_dir)
+
+  execute '!' . l:cmd
+
+  if v:shell_error != 0
+    redraw!
+    echoerr 'CMake 빌드 실패'
+    return 0
   endif
+
+  if get(l:profile, 'compile_commands', 0)
+    call s:UpdateCompileCommands(l:build_dir)
+  endif
+
   redraw!
-  echo "CMake 빌드 성공: " . l:build_mode
+  echo 'CMake 빌드 성공'
+
   return 1
 endfunction
 
-" ================================
-" 6. 실행 / ASan / Valgrind
-" ================================
-" -------------------------------------------------
-" F6
-" ASan Build & Run
-" -------------------------------------------------
-function! s:CMakeASanRun()
-  if !s:CMakeBuild(1)
-    return
+
+" =================================================================
+" 10. Target Provider / Selector
+" =================================================================
+
+function! s:GetTargets(profile_name, kind) abort
+  let l:profile = s:GetProfile(a:profile_name)
+
+  if empty(l:profile)
+    return []
   endif
-  let l:exe = s:GetCMakeExe()
-  if l:exe ==# ''
-    echo "실행 바이너리를 찾을 수 없습니다."
-    return
+
+  if a:kind ==# 'executable'
+    return s:GetExecutableTargets(l:profile.build_dir)
   endif
-  execute '!' . shellescape(l:exe)
+
+  if a:kind ==# 'test'
+    return s:GetTestTargets(l:profile.build_dir)
+  endif
+
+  echoerr '알 수 없는 Target Kind: ' . a:kind
+  return []
 endfunction
 
-" -------------------------------------------------
-" F9
-" Valgrind 실행
-"
-" build/.vim_build_mode가
-" valgrind가 아니면 자동 ASan OFF 빌드
-" -------------------------------------------------
-function! s:CMakeValgrindRun()
-  let l:build_mode = s:GetBuildMode()
-  let l:exe = s:GetCMakeExe()
-  " 현재 build가 Valgrind용이 아니면 재빌드
-  if l:build_mode !=# 'valgrind'
-    if l:build_mode ==# 'asan'
-      echo "현재 build는 ASan ON 상태입니다."
-      echo "Valgrind용 ASan OFF 재빌드를 수행합니다..."
-    else
-      echo "빌드 모드를 확인할 수 없습니다."
-      echo "Valgrind용 ASan OFF 빌드를 수행합니다..."
-    endif
-    if !s:CMakeBuild(0)
-      return
-    endif
-    let l:exe = s:GetCMakeExe()
+
+function! s:SelectTarget(profile_name, kind, ...) abort
+  let l:force = get(a:, 1, 0)
+  let l:targets = s:GetTargets(a:profile_name, a:kind)
+
+  if empty(l:targets)
+    echoerr 'Target을 찾을 수 없습니다.'
+    return {}
   endif
-  " Valgrind 상태이지만 실행 파일이 없는 경우
-  if l:exe ==# '' || !filereadable(l:exe)
-    echo "실행 파일을 찾을 수 없습니다."
-    echo "Valgrind용 빌드를 다시 수행합니다..."
-    if !s:CMakeBuild(0)
-      return
+
+  let l:selected_name = get(s:selected_targets, a:kind, '')
+
+  if !l:force && !empty(l:selected_name)
+    for l:target in l:targets
+      if l:target.name ==# l:selected_name
+        return l:target
+      endif
+    endfor
+  endif
+
+  if len(l:targets) == 1
+    let l:selected = l:targets[0]
+  else
+    let l:menu = ['Target 선택:']
+    let l:index = 1
+
+    for l:target in l:targets
+      if a:kind ==# 'test'
+        let l:label = printf(
+              \ '%d. %s [%d tests]',
+              \ l:index,
+              \ l:target.name,
+              \ len(l:target.tests)
+              \ )
+      else
+        let l:label = printf('%d. %s', l:index, l:target.name)
+      endif
+
+      call add(l:menu, l:label)
+      let l:index += 1
+    endfor
+
+    let l:choice = inputlist(l:menu)
+
+    if l:choice <= 0 || l:choice > len(l:targets)
+      echo 'Target 선택 취소'
+      return {}
     endif
-    let l:exe = s:GetCMakeExe()
+
+    let l:selected = l:targets[l:choice - 1]
   endif
-  if l:exe ==# ''
-    echo "실행 바이너리를 찾을 수 없습니다."
-    return
-  endif
-  echo "Valgrind 상세 메모리 검사 실행..."
-  execute '!' . 'valgrind ' .
-        \ '--leak-check=full ' .
-        \ '--show-leak-kinds=all ' .
-        \ '--track-origins=yes ' .
-        \ shellescape(l:exe)
+
+  let s:selected_targets[a:kind] = l:selected.name
+  return l:selected
 endfunction
 
-" ================================
-" 7. CTest / GTest
-" ================================
-function! s:RunCTestAll()
-  if !isdirectory('build')
-    if !s:CMakeBuild(1)
-      return
-    endif
+
+function! s:ChooseTarget(kind) abort
+  let l:target = s:SelectTarget('asan', a:kind, 1)
+
+  if !empty(l:target)
+    echo '선택된 target: ' . l:target.name
   endif
-  execute '!ctest --test-dir build --output-on-failure'
 endfunction
 
-function! s:RunCTestCurrentModule()
-  if !isdirectory('build')
-    if !s:CMakeBuild(1)
-      return
-    endif
-  endif
-  let l:module = expand('%:p:h:t')
-  if l:module ==# 'tests'
-    let l:module = expand('%:p:h:h:t')
-  endif
-  echo "모듈 테스트 실행: " . l:module
+
+" =================================================================
+" 11. Runners
+" =================================================================
+
+function! s:RunDirect(target) abort
+  execute '!' . shellescape(a:target.path)
+endfunction
+
+
+function! s:RunValgrind(target) abort
   execute
-        \ '!ctest --test-dir build -R ' .
-        \ shellescape(l:module) .
-        \ ' --output-on-failure'
+        \ '!valgrind '
+        \ . '--leak-check=full '
+        \ . '--show-leak-kinds=all '
+        \ . '--track-origins=yes '
+        \ . shellescape(a:target.path)
 endfunction
 
-function! s:RunGTestDirect()
-  if !isdirectory('build')
-    if !s:CMakeBuild(1)
-      return
-    endif
-  endif
-  let l:test_exe = s:GetGTestExe()
-  if l:test_exe ==# ''
-    echo "GTest 실행 파일(*_test)을 찾을 수 없습니다."
-    return
-  endif
-  execute '!' . shellescape(l:test_exe)
-endfunction
 
-" ================================
-" 8. GDB
-" ================================
-function! s:GdbExitHandler(job_id, data)
+function! s:GdbExitHandler(job_id, data) abort
   let s:gdb_bufnr = -1
-  echo "GDB 종료"
+  echo 'GDB 종료'
 endfunction
 
-function! s:CMakeGDB()
-  if !s:CMakeBuild(1)
-    return
-  endif
-  let l:exe = s:GetCMakeExe()
-  if l:exe ==# ''
-    echo "실행 바이너리를 찾을 수 없습니다."
-    return
-  endif
+
+function! s:RunGDB(target) abort
   botright 12split
+
   let s:gdb_bufnr = term_start(
-        \ ['gdb', '-q', l:exe],
+        \ ['gdb', '-q', a:target.path],
         \ {
         \   'exit_cb': function('s:GdbExitHandler'),
         \   'curwin': 1,
         \   'term_name': 'gdb-inferior'
-        \ }
-        \ )
+        \ })
+
   call term_sendkeys(
         \ s:gdb_bufnr,
         \ "break main\nrun\n"
         \ )
 endfunction
 
-" ================================
-" 9. 단축키
-" ================================
-let mapleader = " "
 
-" ----------------
-" LSP / 파일 전환
-" ----------------
-nnoremap <F1> :CocCommand document.toggleInlayHint<CR>
-nnoremap <F4> :FSHere<CR>
+let s:runners = {
+      \ 'direct': function('s:RunDirect'),
+      \ 'valgrind': function('s:RunValgrind'),
+      \ 'gdb': function('s:RunGDB')
+      \ }
 
-" ----------------
-" Build / Memory
-" ----------------
+
+function! s:Run(target, runner) abort
+  let l:runner = get(s:runners, a:runner, v:null)
+
+  if l:runner is v:null
+    echoerr '알 수 없는 Runner: ' . a:runner
+    return
+  endif
+
+  call l:runner(a:target)
+endfunction
+
+
+" =================================================================
+" 12. Build + Select + Run Pipeline
+" =================================================================
+
+function! s:BuildAndRun(profile, kind, runner) abort
+  if !s:Build(a:profile)
+    return
+  endif
+
+  let l:target = s:SelectTarget(a:profile, a:kind)
+
+  if empty(l:target)
+    return
+  endif
+
+  call s:Run(l:target, a:runner)
+endfunction
+
+
+" =================================================================
+" 13. CTest
+" =================================================================
+
+function! s:RunCTest(pattern) abort
+  if !s:Build('asan')
+    return
+  endif
+
+  let l:profile = s:GetProfile('asan')
+
+  let l:cmd =
+        \ 'ctest --test-dir '
+        \ . shellescape(l:profile.build_dir)
+
+  if !empty(a:pattern)
+    let l:cmd .= ' -R ' . shellescape(a:pattern)
+  endif
+
+  let l:cmd .= ' --output-on-failure'
+
+  execute '!' . l:cmd
+endfunction
+
+
+function! s:RunCTestCurrentModule() abort
+  let l:module = expand('%:p:h:t')
+
+  if l:module ==# 'tests'
+    let l:module = expand('%:p:h:h:t')
+  endif
+
+  echo '모듈 테스트 실행: ' . l:module
+  call s:RunCTest(l:module)
+endfunction
+
+
+" =================================================================
+" 14. GDB Command
+" =================================================================
+
+function! s:SendGdbCommand(cmd) abort
+  if s:gdb_bufnr == -1 || !bufexists(s:gdb_bufnr)
+    echo '실행 중인 GDB 터미널을 찾을 수 없습니다.'
+    return
+  endif
+
+  call term_sendkeys(s:gdb_bufnr, a:cmd . "\n")
+endfunction
+
+
+" =================================================================
+" 15. Leader
+" =================================================================
+
+let mapleader = ' '
+
+
+" =================================================================
+" 16. LSP / File Switch
+" =================================================================
+
+nnoremap <F1>
+      \ :CocCommand document.toggleInlayHint<CR>
+
+nnoremap <F4>
+      \ :FSHere<CR>
+
+
+" =================================================================
+" 17. Build / Run
+" =================================================================
+
 " F5 : ASan Build
-" F6 : ASan Build & Run
-" F8 : Valgrind용 Build
-" F9 : Valgrind Run
-nnoremap <F5> :w<CR>:call <SID>CMakeBuild(1)<CR>
-nnoremap <F6> :w<CR>:call <SID>CMakeASanRun()<CR>
-nnoremap <F8> :w<CR>:call <SID>CMakeBuild(0)<CR>
-nnoremap <F9> :w<CR>:call <SID>CMakeValgrindRun()<CR>
+nnoremap <F5>
+      \ :w<CR>
+      \ :call <SID>Build('asan')<CR>
 
-" ----------------
-" CTest / GTest
-" ----------------
-" <leader>t : 전체 CTest
-" <leader>f : 현재 모듈 CTest
-" <leader>g : GTest 직접 실행
+" F6 : ASan Build + Run
+nnoremap <F6>
+      \ :w<CR>
+      \ :call <SID>BuildAndRun('asan', 'executable', 'direct')<CR>
+
+" F8 : Valgrind Build
+nnoremap <F8>
+      \ :w<CR>
+      \ :call <SID>Build('valgrind')<CR>
+
+" F9 : Valgrind Build + Run
+nnoremap <F9>
+      \ :w<CR>
+      \ :call <SID>BuildAndRun(
+      \ 'valgrind',
+      \ 'executable',
+      \ 'valgrind'
+      \ )<CR>
+
+" <leader>r : executable target 재선택
+nnoremap <leader>r
+      \ :call <SID>ChooseTarget('executable')<CR>
+
+
+" =================================================================
+" 18. CTest / GTest
+" =================================================================
+
+" 전체 CTest
 nnoremap <leader>t
       \ :w<CR>
-      \ :call <SID>RunCTestAll()<CR>
+      \ :call <SID>RunCTest('')<CR>
+
+" 현재 모듈 CTest
 nnoremap <leader>f
       \ :w<CR>
       \ :call <SID>RunCTestCurrentModule()<CR>
+
+" GTest executable 직접 실행
 nnoremap <leader>g
       \ :w<CR>
-      \ :call <SID>RunGTestDirect()<CR>
+      \ :call <SID>BuildAndRun('asan', 'test', 'direct')<CR>
 
-" ----------------
-" GDB
-" ----------------
+
+" =================================================================
+" 19. GDB
+" =================================================================
+
+" GDB 실행
 nnoremap <leader>d
       \ :w<CR>
-      \ :call <SID>CMakeGDB()<CR>
+      \ :call <SID>BuildAndRun('asan', 'executable', 'gdb')<CR>
+
+" 현재 줄 breakpoint
 nnoremap <leader>b
       \ :call <SID>SendGdbCommand(
-      \ "break " . expand('%:t') . ":" . line('.')
+      \ 'break '
+      \ . expand('%:t')
+      \ . ':'
+      \ . line('.')
       \ )<CR>
 
-" ----------------
-" CoC / LSP
-" ----------------
+
+" =================================================================
+" 20. GDB Step
+" =================================================================
+
+nnoremap <F10>
+      \ :call <SID>SendGdbCommand('next')<CR>
+
+tnoremap <F10>
+      \ <C-\><C-n>
+      \ :call <SID>SendGdbCommand('next')<CR>i
+
+nnoremap <F11>
+      \ :call <SID>SendGdbCommand('step')<CR>
+
+tnoremap <F11>
+      \ <C-\><C-n>
+      \ :call <SID>SendGdbCommand('step')<CR>i
+
+nnoremap <F12>
+      \ :call <SID>SendGdbCommand('continue')<CR>
+
+tnoremap <F12>
+      \ <C-\><C-n>
+      \ :call <SID>SendGdbCommand('continue')<CR>i
+
+
+" =================================================================
+" 21. CoC / LSP
+" =================================================================
+
 nnoremap <silent> K
       \ :call CocActionAsync('doHover')<CR>
+
 nnoremap <silent> gd
       \ <Plug>(coc-definition)
+
 nnoremap <silent> gy
       \ <Plug>(coc-type-definition)
+
 nnoremap <silent> gi
       \ <Plug>(coc-implementation)
+
 nnoremap <silent> gr
       \ <Plug>(coc-references)
+
 nnoremap <silent> <leader>rn
       \ <Plug>(coc-rename)
 
-" ----------------
-" 코드 포맷
-" ----------------
-nnoremap <silent> <leader>cf
-      \ :call FormatCode()<CR>
 
-function! FormatCode()
+" =================================================================
+" 22. Code Format
+" =================================================================
+
+function! FormatCode() abort
   if CocHasProvider('format')
     call CocAction('format')
   else
     normal! gg=G
-    echo "LSP Formatter 미연동: 일반 gg=G 정렬 적용"
+    echo 'LSP Formatter 미연동: gg=G 적용'
   endif
 endfunction
 
-" ----------------
-" GDB Step Control
-" ----------------
-" F10 : next
-" F11 : step
-" F12 : continue
-tnoremap <F10>
-      \ <C-\><C-n>
-      \ :call <SID>SendGdbCommand("next")<CR>i
-tnoremap <F11>
-      \ <C-\><C-n>
-      \ :call <SID>SendGdbCommand("step")<CR>i
-tnoremap <F12>
-      \ <C-\><C-n>
-      \ :call <SID>SendGdbCommand("continue")<CR>i
-nnoremap <F10>
-      \ :call <SID>SendGdbCommand("next")<CR>
-nnoremap <F11>
-      \ :call <SID>SendGdbCommand("step")<CR>
-nnoremap <F12>
-      \ :call <SID>SendGdbCommand("continue")<CR>
-nnoremap <silent> <Esc><Esc>
-      \ :nohlsearch<CR>
+nnoremap <silent> <leader>cf
+      \ :call FormatCode()<CR>
 
-" ================================
-" 10. 파일 탐색 / 검색
-" ================================
-" NERDTree
+
+" =================================================================
+" 23. File Search
+" =================================================================
+
 nnoremap <C-n>
       \ :NERDTreeToggle<CR>
-" FZF 파일 검색
+
 nnoremap <C-p>
       \ :Files<CR>
-" ripgrep + FZF 프로젝트 문자열 검색
+
 nnoremap <leader>rg
       \ :Rg<CR>
 
-" ================================
-" 11. Insert Mode
-" ================================
+
+" =================================================================
+" 24. Insert Mode
+" =================================================================
+
 inoremap jk <Esc>
 inoremap kj <Esc>
 
-" ================================
-" 12. coc.nvim Completion
-" ================================
+
+" =================================================================
+" 25. coc.nvim Completion
+" =================================================================
+
 function! s:check_back_space() abort
   let l:col = col('.') - 1
-  return !l:col || getline('.')[l:col - 1] =~# '\s'
+
+  return !l:col
+        \ || getline('.')[l:col - 1] =~# '\s'
 endfunction
+
 
 inoremap <silent><expr> <CR>
       \ coc#pum#visible()
       \ ? coc#pum#confirm()
-      \ : "\<C-g>u\<CR>\<c-r>=coc#on_enter()\<CR>"
+      \ : "\<C-g>u\<CR>\<C-r>=coc#on_enter()\<CR>"
+
 inoremap <silent><expr> <TAB>
       \ coc#pum#visible()
       \ ? coc#pum#next(1)
       \ : <SID>check_back_space()
       \ ? "\<Tab>"
       \ : coc#refresh()
+
 inoremap <expr> <S-TAB>
       \ coc#pum#visible()
       \ ? coc#pum#prev(1)
       \ : "\<C-h>"
 
-" ================================
-" 13. vim-fswitch
-" ================================
+
+" =================================================================
+" 26. vim-fswitch
+" =================================================================
+
 augroup FSwitchPaths
   autocmd!
+
   autocmd BufEnter *.cpp,*.cc,*.c
         \ let b:fswitchdst = 'h,hpp' |
         \ let b:fswitchlocs =
         \ 'reg:|src|include|,reg:|src|../include|,../include,.,tests'
+
   autocmd BufEnter *.h,*.hpp
         \ let b:fswitchdst = 'cpp,cc,c' |
         \ let b:fswitchlocs =
         \ 'reg:|include|src|,reg:|include|../src|,../src,.,tests'
 augroup END
 
-" ================================
-" 14. WSL 클립보드
-" ================================
+
+" =================================================================
+" 27. WSL Clipboard
+" =================================================================
+
 let g:clipboard = {
       \ 'name': 'win32yank',
       \ 'copy': {
@@ -583,15 +882,22 @@ let g:clipboard = {
       \ 'cache_enabled': 0
       \ }
 
-" ================================
-" 15. 커서 모양
-" ================================
+
+" =================================================================
+" 28. Cursor Shape
+" =================================================================
+
 if !has('gui_running')
-  " Insert mode: Vertical Bar
   let &t_SI = "\<Esc>[5 q"
-  " Normal mode: Block
   let &t_EI = "\<Esc>[2 q"
-  " Replace mode: Underline
   let &t_SR = "\<Esc>[3 q"
 endif
+
+
+" =================================================================
+" 29. Misc
+" =================================================================
+
+nnoremap <silent> <Esc><Esc>
+      \ :nohlsearch<CR>
 
