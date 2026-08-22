@@ -67,7 +67,7 @@ set background=dark
 let g:gruvbox_contrast_dark = 'medium'
 let g:gruvbox_bold = 0
 let g:gruvbox_italic = 0
-let g:airline_theme='gruvbox'
+let g:airline_theme ='gruvbox'
 let g:airline_powerline_fonts = 0
 let g:rainbow_active = 1
 colorscheme gruvbox
