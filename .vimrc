@@ -64,7 +64,7 @@ autocmd FileType cmake highlight link cmakeCommandStart String
 set number
 set termguicolors
 set background=dark
-let g:gruvbox_contrast_dark = 'medium'
+let g:gruvbox_contrast_dark = 'midium'
 let g:gruvbox_bold = 0
 let g:gruvbox_italic = 0
 let g:airline_theme='gruvbox'
