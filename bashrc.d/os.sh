@@ -8,7 +8,7 @@ fi
 
 
 case "$ID" in
-  fedora)
+  fedora|ubuntu|debian)
     alias vim='gvim -v'
     ;;
 esac
